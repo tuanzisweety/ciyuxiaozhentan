@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>词语小侦探 — 单词删除范式实验系统 v2.0</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700;900&family=ZCOOL+KuaiLe&display=swap');
+
+:root {
+  --sky: #E8F4FD; --sky2: #D0E8F7; --cloud: #FFFFFF;
+  --ocean: #2B6CB0; --ocean-d: #1A4971; --ocean-l: #EBF4FF;
+  --sun: #F6AD55; --sun-d: #DD6B20; --sun-l: #FEEBC8;
+  --grass: #48BB78; --grass-d: #276749; --grass-l: #C6F6D5;
+  --cherry: #FC8181; --cherry-d: #C53030; --cherry-l: #FFF5F5;
+  --ink: #1A202C; --ink2: #4A5568; --ink3: #A0AEC0;
+  --mist: #EDF2F7; --frost: #F7FAFC;
+  --star: #ECC94B;
+  --radius: 16px;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-md: 0 8px 30px rgba(43,108,176,0.1);
+  --shadow-lg: 0 16px 50px rgba(43,108,176,0.12);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Noto Sans SC', sans-serif;
+  background: var(--sky);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Animated background */
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: 0;
+  background:
+    radial-gradient(ellipse at 20% 80%, rgba(72,187,120,0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(246,173,85,0.1) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(43,108,176,0.04) 0%, transparent 70%),
+    linear-gradient(170deg, #E8F4FD 0%, #F0F7FF 40%, #FFF9EB 80%, #F0FFF4 100%);
+}
+
+/* Floating clouds */
+.cloud-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; overflow: hidden; }
+.cloud {
+  position: absolute; background: rgba(255,255,255,0.6); border-radius: 50%;
+  filter: blur(1px);
+}
+.cloud-1 { width:180px; height:60px; top:8%; left:-180px; animation: drift 35s linear infinite; }
+.cloud-2 { width:120px; height:40px; top:15%; left:-120px; animation: drift 28s linear infinite 8s; }
+.cloud-3 { width:200px; height:50px; top:5%; left:-200px; animation: drift 40s linear infinite 15s; }
+
+@keyframes drift { from{transform:translateX(0)} to{transform:translateX(calc(100vw + 300px))} }
+@keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+@keyframes popIn { 0%{transform:scale(0.4);opacity:0} 60%{transform:scale(1.08)} 100%{transform:scale(1);opacity:1} }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+@keyframes wiggle { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-5deg)} 75%{transform:rotate(5deg)} }
+@keyframes starPop { 0%{transform:scale(0) rotate(-45deg);opacity:0} 50%{transform:scale(1.4) rotate(10deg);opacity:1} 100%{transform:scale(1) rotate(0);opacity:1} }
+@keyframes confettiFall { 0%{transform:translateY(0) rotate(0);opacity:1} 100%{transform:translateY(80px) rotate(720deg);opacity:0} }
+@keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
+@keyframes breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.03)} }
+@keyframes slideRight { from{transform:translateX(-30px);opacity:0} to{transform:translateX(0);opacity:1} }
+@keyframes progressPulse { 0%,100%{box-shadow:0 0 0 0 rgba(43,108,176,0.3)} 50%{box-shadow:0 0 0 6px rgba(43,108,176,0)} }
+
+.wrapper { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+
+/* ===== Top Bar ===== */
+.topbar {
+  width: 100%; background: rgba(255,255,255,0.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  padding: 10px 24px; display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 10;
+}
+.brand { display:flex; align-items:center; gap:10px; }
+.brand-text { font-family:'ZCOOL KuaiLe',cursive; font-size:20px; color:var(--ocean); }
+.topbar-meta { display:flex; align-items:center; gap:16px; }
+.progress-box { display:flex; align-items:center; gap:8px; min-width:140px; }
+.progress-num { font-size:12px; font-weight:700; color:var(--ink3); }
+.progress-track { flex:1; height:8px; background:var(--mist); border-radius:4px; overflow:hidden; position:relative; }
+.progress-fill { height:100%; border-radius:4px; background:linear-gradient(90deg,var(--ocean),var(--sun)); transition:width 0.6s cubic-bezier(0.4,0,0.2,1); }
+.stars-row { display:flex; gap:1px; }
+
+/* ===== Card ===== */
+.card {
+  background: rgba(255,255,255,0.95); backdrop-filter: blur(8px);
+  border-radius: 28px; padding: 36px 40px; max-width: 680px; width: 94%;
+  margin: 24px auto; box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(255,255,255,0.8);
+  animation: fadeUp 0.45s ease;
+}
+@media(max-width:600px){ .card{padding:24px 20px; border-radius:20px;} }
+
+/* ===== Chips ===== */
+.chip-row { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; padding:4px 0; }
+.chip {
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:12px 22px; border-radius:14px;
+  font-size:21px; font-weight:600; font-family:'Noto Sans SC',sans-serif;
+  transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+  user-select:none; position:relative; cursor:default;
+}
+.chip-demo { background:var(--ocean-l); color:var(--ocean); border:2px solid rgba(43,108,176,0.15); }
+.chip-deleted {
+  background:var(--cherry-l); color:var(--cherry-d); border:2px solid rgba(252,129,129,0.3);
+  text-decoration:line-through; opacity:0.55; transform:scale(0.9);
+}
+.chip-selectable {
+  background:white; color:var(--ink); border:2px solid var(--mist);
+  cursor:pointer; box-shadow:var(--shadow-sm);
+}
+.chip-selectable:hover {
+  border-color:var(--sun); background:var(--sun-l);
+  transform:translateY(-3px) scale(1.05); box-shadow:0 6px 20px rgba(246,173,85,0.2);
+}
+.chip-selected {
+  background:var(--cherry-l); color:var(--cherry-d); border:2px solid var(--cherry);
+  text-decoration:line-through; transform:scale(0.93); opacity:0.65;
+}
+
+/* ===== Buttons ===== */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  padding:14px 40px; border-radius:16px; border:none;
+  font-size:17px; font-weight:700; font-family:'Noto Sans SC',sans-serif;
+  cursor:pointer; transition:all 0.2s; position:relative; overflow:hidden;
+}
+.btn:hover { transform:translateY(-2px); filter:brightness(1.06); }
+.btn:active { transform:translateY(0); }
+.btn-ocean { background:linear-gradient(135deg,var(--ocean),#3B82C4); color:white; box-shadow:0 4px 16px rgba(43,108,176,0.35); }
+.btn-sun { background:linear-gradient(135deg,var(--sun),var(--sun-d)); color:white; box-shadow:0 4px 16px rgba(246,173,85,0.35); }
+.btn-grass { background:linear-gradient(135deg,var(--grass),var(--grass-d)); color:white; box-shadow:0 4px 16px rgba(72,187,120,0.35); }
+.btn-sm { padding:10px 24px; font-size:14px; border-radius:12px; }
+
+/* ===== Labels ===== */
+.tag { display:inline-block; padding:5px 14px; border-radius:10px; font-size:13px; font-weight:700; letter-spacing:0.3px; }
+.tag-ocean { background:var(--ocean-l); color:var(--ocean); }
+.tag-sun { background:var(--sun-l); color:var(--sun-d); }
+.tag-grass { background:var(--grass-l); color:var(--grass-d); }
+.tag-cherry { background:var(--cherry-l); color:var(--cherry-d); }
+
+/* ===== Utility ===== */
+.center { text-align:center; }
+.flex-between { display:flex; align-items:center; justify-content:space-between; }
+.mb12 { margin-bottom:12px; } .mb16 { margin-bottom:16px; } .mb20 { margin-bottom:20px; } .mb24 { margin-bottom:24px; }
+.mt12 { margin-top:12px; } .mt20 { margin-top:20px; }
+.muted { color:var(--ink3); } .small { font-size:13px; } .xsmall { font-size:11px; }
+
+.section-box { border-radius:18px; padding:22px 24px; }
+.demo-box { background:var(--frost); border:1px solid var(--mist); }
+.test-box { background:rgba(198,246,213,0.18); border:2px solid rgba(72,187,120,0.15); }
+
+.reminder { background:var(--frost); border:1px dashed var(--mist); border-radius:12px; padding:10px 16px; font-size:13px; }
+.reminder .struck { text-decoration:line-through; color:var(--cherry-d); opacity:0.5; }
+
+.guide { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+
+.stat-grid { display:flex; justify-content:space-around; align-items:center; }
+.stat-item { text-align:center; }
+.stat-num { font-size:34px; font-weight:900; }
+.stat-label { font-size:12px; color:var(--ink3); margin-top:2px; }
+.stat-div { width:1px; height:48px; background:var(--mist); }
+
+.result-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.result-tbl th { padding:8px 10px; text-align:left; background:var(--ocean-l); color:var(--ocean); font-weight:700; }
+.result-tbl th:first-child { border-radius:8px 0 0 0; } .result-tbl th:last-child { border-radius:0 8px 0 0; text-align:center; }
+.result-tbl td { padding:8px 10px; border-bottom:1px solid var(--mist); }
+.result-tbl td:last-child { text-align:center; }
+.result-tbl tr:hover { background:var(--frost); }
+
+.footer { margin-top:16px; padding:14px 18px; background:var(--frost); border-radius:14px; font-size:11px; color:var(--ink3); line-height:1.9; text-align:center; border:1px solid var(--mist); }
+
+/* Design panel */
+.design-toggle {
+  position:fixed; bottom:20px; right:20px; z-index:100;
+  width:52px; height:52px; border-radius:50%; border:none;
+  background:var(--ocean); color:white; font-size:22px;
+  cursor:pointer; box-shadow:0 4px 20px rgba(43,108,176,0.4);
+  display:flex; align-items:center; justify-content:center;
+  transition:all 0.3s;
+}
+.design-toggle:hover { transform:scale(1.1); }
+.design-panel {
+  position:fixed; top:0; right:-420px; width:400px; height:100vh;
+  background:white; z-index:99; box-shadow:-4px 0 30px rgba(0,0,0,0.1);
+  transition:right 0.4s cubic-bezier(0.4,0,0.2,1);
+  overflow-y:auto; padding:28px 24px;
+}
+.design-panel.open { right:0; }
+.design-panel h2 { font-size:18px; font-weight:800; color:var(--ocean); margin-bottom:16px; border-bottom:2px solid var(--ocean-l); padding-bottom:8px; }
+.design-panel h3 { font-size:14px; font-weight:700; color:var(--sun-d); margin:16px 0 8px; }
+.design-panel p, .design-panel li { font-size:13px; color:var(--ink2); line-height:1.8; }
+.design-panel ul { padding-left:18px; }
+.design-panel .close-btn { position:absolute; top:16px; right:16px; background:none; border:none; font-size:24px; color:var(--ink3); cursor:pointer; }
+.dp-badge { display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:700; margin-right:4px; }
+.dp-b1 { background:var(--ocean-l); color:var(--ocean); }
+.dp-b2 { background:var(--sun-l); color:var(--sun-d); }
+.dp-b3 { background:var(--grass-l); color:var(--grass-d); }
+.dp-b4 { background:var(--cherry-l); color:var(--cherry-d); }
+
+/* Break screen */
+.break-icon { font-size:72px; animation:float 2.5s ease-in-out infinite; }
+.break-bar { display:flex; gap:6px; justify-content:center; margin:16px 0; }
+.break-dot { width:12px; height:12px; border-radius:50%; background:var(--mist); transition:background 0.3s; }
+.break-dot.active { background:var(--grass); }
+
+/* Complexity badge */
+.cpx-badge { font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; }
+.cpx-easy { background:#DCFCE7; color:#166534; }
+.cpx-mid { background:#FEF3C7; color:#92400E; }
+.cpx-hard { background:#FEE2E2; color:#991B1B; }
+</style>
+</head>
+<body>
+
+<svg style="display:none">
+  <symbol id="panda" viewBox="0 0 64 64">
+    <circle cx="32" cy="36" r="22" fill="white" stroke="#1A202C" stroke-width="2"/>
+    <ellipse cx="20" cy="26" rx="9" ry="8" fill="#1A202C"/><ellipse cx="44" cy="26" rx="9" ry="8" fill="#1A202C"/>
+    <circle cx="22" cy="28" r="5" fill="white"/><circle cx="42" cy="28" r="5" fill="white"/>
+    <circle cx="23" cy="27" r="2.5" fill="#1A202C"/><circle cx="43" cy="27" r="2.5" fill="#1A202C"/>
+    <circle cx="24" cy="26" r="1" fill="white"/><circle cx="44" cy="26" r="1" fill="white"/>
+    <ellipse cx="32" cy="38" rx="4" ry="3" fill="#1A202C"/>
+    <path d="M28 42 Q32 46 36 42" fill="none" stroke="#1A202C" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="22" cy="40" r="3" fill="#FBBF8A" opacity="0.5"/><circle cx="42" cy="40" r="3" fill="#FBBF8A" opacity="0.5"/>
+  </symbol>
+  <symbol id="star-y" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#ECC94B" stroke="#D69E2E" stroke-width="0.8"/></symbol>
+  <symbol id="star-n" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#EDF2F7" stroke="#CBD5E0" stroke-width="0.8"/></symbol>
+</svg>
+
+<div class="cloud-layer"><div class="cloud cloud-1"></div><div class="cloud cloud-2"></div><div class="cloud cloud-3"></div></div>
+
+<div class="wrapper">
+  <div class="topbar">
+    <div class="brand">
+      <svg width="38" height="38"><use href="#panda"/></svg>
+      <span class="brand-text">词语小侦探</span>
+      <span style="font-size:11px;color:var(--ink3);margin-left:4px">v2.0</span>
+    </div>
+    <div class="topbar-meta" id="topbar-meta"></div>
+  </div>
+  <div id="app"></div>
+</div>
+
+<!-- Design Documentation Panel -->
+<button class="design-toggle" id="designToggle" title="查看设计说明">📐</button>
+<div class="design-panel" id="designPanel">
+  <button class="close-btn" onclick="toggleDesignPanel()">×</button>
+  <h2>🎨 界面设计说明文档</h2>
+  <p style="color:var(--ink3);font-size:12px;margin-bottom:16px">答辩展示用 · 同济大学听障儿童语言结构表征项目组</p>
+
+  <h3>一、设计原则</h3>
+  <p>面向<strong>4-9岁听障及健听儿童</strong>，以「低认知负荷 + 高趣味性」为核心目标，确保儿童凭直觉即可完成任务。</p>
+
+  <h3>二、四大核心机制</h3>
+  <ul>
+    <li><span class="dp-badge dp-b1">图标化指令</span>用熊猫IP形象替代文字说明，通过角色引导降低指令理解门槛</li>
+    <li><span class="dp-badge dp-b2">动画示范</span>示范阶段用视觉动画展示「删除」操作，儿童无需阅读复杂规则即可模仿</li>
+    <li><span class="dp-badge dp-b3">即时反馈</span>每题结束立即给予星星奖励或温和鼓励，维持参与动机</li>
+    <li><span class="dp-badge dp-b4">疲劳控制</span>进度条可视化 + 第6题后强制中场休息 + 总题量控制在12题以内</li>
+  </ul>
+
+  <h3>三、交互流程</h3>
+  <p>每道题经历4个阶段：</p>
+  <ul>
+    <li><strong>观察</strong>：展示示范句全貌</li>
+    <li><strong>示范</strong>：动画演示删除过程</li>
+    <li><strong>操作</strong>：儿童点击词语芯片选择</li>
+    <li><strong>反馈</strong>：即时呈现结果</li>
+  </ul>
+
+  <h3>四、语料分级设计</h3>
+  <ul>
+    <li><span class="cpx-badge cpx-easy">简单</span> 4词句、单一成分删除（T01-T04, T09）→ 适合4岁+</li>
+    <li><span class="cpx-badge cpx-mid">中等</span> 4-5词句、含介词短语或动词短语（T05-T08, T11）→ 适合5岁+</li>
+    <li><span class="cpx-badge cpx-hard">复杂</span> 6词句、含嵌套修饰结构（T10, T12）→ 适合6岁+</li>
+  </ul>
+
+  <h3>五、适配验证</h3>
+  <p>先导实验中，团队以一对一形式引导24名4-9岁儿童在电脑端完成测试，验证结果：</p>
+  <ul>
+    <li>6岁以上儿童均能独立理解任务指令</li>
+    <li>4-5岁儿童在1次示范后即可开始操作</li>
+    <li>游戏化界面有效维持了儿童10-15分钟注意力</li>
+    <li>中场休息机制显著降低后半程疲劳效应</li>
+  </ul>
+
+  <h3>六、技术实现</h3>
+  <p>纯前端HTML/CSS/JS实现，无需后端服务。支持触屏操作，兼容平板电脑和PC。数据通过本地记录导出，确保儿童隐私安全。</p>
+</div>
+
+<script>
+const T=[
+  {id:"T01",d:["小猫","在","草地上","玩耍"],dd:[2],t:["小狗","在","花园里","睡觉"],tgt:[2],cpx:"简单",cat:"NP"},
+  {id:"T02",d:["妈妈","买了","很多","苹果"],dd:[2,3],t:["爸爸","吃了","两个","橘子"],tgt:[2,3],cpx:"简单",cat:"NP"},
+  {id:"T03",d:["哥哥","昨天","去了","公园"],dd:[1],t:["姐姐","今天","来了","学校"],tgt:[1],cpx:"简单",cat:"NP"},
+  {id:"T04",d:["我","喜欢","红色的","花"],dd:[2,3],t:["他","讨厌","绿色的","虫子"],tgt:[2,3],cpx:"简单",cat:"NP"},
+  {id:"T05",d:["老师","正在","教室里","讲课"],dd:[1,2,3],t:["同学","已经","操场上","跑步"],tgt:[1,2,3],cpx:"中等",cat:"VP"},
+  {id:"T06",d:["弟弟","骑","自行车","去","上学"],dd:[2],t:["妹妹","坐","公交车","去","医院"],tgt:[2],cpx:"中等",cat:"NP"},
+  {id:"T07",d:["小鸟","飞到","大树上","唱歌"],dd:[2],t:["小鱼","游到","河里","吃东西"],tgt:[2],cpx:"中等",cat:"NP"},
+  {id:"T08",d:["奶奶","给","我","讲","故事"],dd:[1,2],t:["爷爷","带","他","去","钓鱼"],tgt:[1,2],cpx:"中等",cat:"VP"},
+  {id:"T09",d:["这个","蛋糕","非常","好吃"],dd:[2,3],t:["那个","玩具","特别","有趣"],tgt:[2,3],cpx:"简单",cat:"ADJP"},
+  {id:"T10",d:["我们","一起","去","动物园","看","熊猫"],dd:[3],t:["他们","一起","去","游乐场","玩","过山车"],tgt:[3],cpx:"复杂",cat:"NP"},
+  {id:"T11",d:["下雨了","小朋友","都","回家了"],dd:[1],t:["天黑了","小动物","都","睡觉了"],tgt:[1],cpx:"中等",cat:"NP"},
+  {id:"T12",d:["桌子上","有","一本","很厚的","书"],dd:[2,3,4],t:["椅子上","放","一件","很旧的","衣服"],tgt:[2,3,4],cpx:"复杂",cat:"NP"},
+];
+const BREAK_AFTER=6;
+let S={phase:'welcome',ti:0,sel:new Set(),score:0,res:[],breakTimer:null,breakCount:0};
+
+function panda(s){return `<svg width="${s}" height="${s}"><use href="#panda"/></svg>`;}
+function star(f,s=18){return `<svg width="${s}" height="${s}"><use href="#star-${f?'y':'n'}"/></svg>`;}
+function starsHtml(n,total,s=18){let h='';for(let i=0;i<total;i++)h+=star(i<n,s);return h;}
+function cpxBadge(c){const m={简单:'cpx-easy',中等:'cpx-mid',复杂:'cpx-hard'};return `<span class="cpx-badge ${m[c]||''}">${c}</span>`;}
+
+function renderMeta(){
+  const el=document.getElementById('topbar-meta');
+  if(S.phase==='welcome'||S.phase==='results'){el.innerHTML='';return;}
+  const pct=((S.ti+1)/T.length*100);
+  const earned=S.phase==='feedback'?S.ti+1:S.ti;
+  el.innerHTML=`
+    <div class="progress-box">
+      <span class="progress-num">${S.ti+1}/${T.length}</span>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+    </div>
+    <div class="stars-row">${starsHtml(S.score,earned,16)}</div>`;
+}
+
+function chip(word,type,idx){
+  const cls={demo:'chip-demo',deleted:'chip-deleted',selectable:S.sel.has(idx)?'chip-selected':'chip-selectable',neutral:'chip-neutral'};
+  const oc=type==='selectable'?`onclick="toggle(${idx})"`:'';
+  const delay=((idx||0)*0.06).toFixed(2);
+  return `<span class="chip ${cls[type]||''}" ${oc} style="animation:fadeUp 0.35s ease ${delay}s both">${word}</span>`;
+}
+
+function R(){
+  renderMeta();
+  const app=document.getElementById('app');
+  const t=T[S.ti];
+
+  // ===== WELCOME =====
+  if(S.phase==='welcome'){
+    app.innerHTML=`
+      <div class="card center" style="margin-top:36px">
+        <div style="animation:float 3s ease-in-out infinite">${panda(90)}</div>
+        <h1 style="font-family:'ZCOOL KuaiLe',cursive;font-size:32px;color:var(--ocean);margin:12px 0 6px">欢迎来到「词语小侦探」！</h1>
+        <p style="font-size:15px;color:var(--ink2);line-height:1.9;margin-bottom:4px">
+          观察熊猫老师的示范，<br>找出句子中<strong style="color:var(--sun-d)">应该删除</strong>的词语吧！
+        </p>
+        <div class="section-box demo-box mb20" style="text-align:left;margin-top:20px">
+          <div style="font-size:15px;font-weight:700;color:var(--ocean);margin-bottom:12px">🎮 游戏规则</div>
+          <div style="font-size:14px;color:var(--ink);line-height:2.2">
+            <span style="color:var(--ocean);font-weight:700">①</span> 看看熊猫老师怎么删除词语<br>
+            <span style="color:var(--sun-d);font-weight:700">②</span> 在新句子里点击要删除的词语<br>
+            <span style="color:var(--grass);font-weight:700">③</span> 点「确认删除」提交答案<br>
+            <span style="color:var(--cherry-d);font-weight:700">④</span> 答对得 ⭐，一共 ${T.length} 题！
+          </div>
+        </div>
+        <button class="btn btn-ocean" onclick="go('demo')">🚀 开始游戏</button>
+        <div class="footer">
+          单样本单词删除范式（One-shot Word Deletion）实验界面 v2.0<br>
+          同济大学 · 听障儿童语言结构表征的发展与AI辅助启示 · 于珏老师指导<br>
+          <span style="color:var(--ink3)">点击右下角 📐 查看完整设计说明文档</span>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // ===== BREAK =====
+  if(S.phase==='break'){
+    const dots=Array.from({length:5},(_,i)=>`<div class="break-dot ${i<S.breakCount?'active':''}"></div>`).join('');
+    app.innerHTML=`
+      <div class="card center">
+        <div class="break-icon">🌈</div>
+        <h2 style="font-size:24px;font-weight:800;color:var(--grass);margin:8px 0">休息一下吧！</h2>
+        <p style="font-size:15px;color:var(--ink2);line-height:1.8;margin-bottom:8px">
+          你已经完成了一半啦，太厉害了！<br>
+          深呼吸，放松一下眼睛 👀
+        </p>
+        <div class="break-bar">${dots}</div>
+        <p class="small muted mb16">休息片刻后继续</p>
+        <button class="btn btn-grass" onclick="go('demo')">💪 我准备好了！</button>
+        <div class="mt12 xsmall muted">
+          疲劳控制机制：第 ${BREAK_AFTER} 题后自动触发中场休息
+        </div>
+      </div>`;
+    if(!S.breakTimer){
+      S.breakCount=0;
+      S.breakTimer=setInterval(()=>{S.breakCount++;if(S.breakCount>=5)clearInterval(S.breakTimer);R();},800);
+    }
+    return;
+  }
+
+  // ===== DEMO =====
+  if(S.phase==='demo'){
+    let chips='';t.d.forEach((w,i)=>{chips+=chip(w,'demo',i);});
+    app.innerHTML=`
+      <div class="card">
+        <div class="flex-between mb16">
+          <span class="tag tag-ocean">📖 观察示范</span>
+          <span class="small muted">第 ${S.ti+1}/${T.length} 题　${cpxBadge(t.cpx)}</span>
+        </div>
+        <div class="section-box demo-box mb20">
+          <div class="guide">${panda(36)}<span style="font-size:14px;font-weight:600;color:var(--ink2)">熊猫老师说：「看好了，我要变魔术啦！」</span></div>
+          <div class="chip-row">${chips}</div>
+        </div>
+        <div class="center"><button class="btn btn-sun" onclick="go('demo_anim')">👀 看看怎么删</button></div>
+      </div>`;
+    return;
+  }
+
+  // ===== DEMO ANIMATE =====
+  if(S.phase==='demo_anim'){
+    let chips='';t.d.forEach((w,i)=>{chips+=chip(w,t.dd.includes(i)?'deleted':'demo',i);});
+    app.innerHTML=`
+      <div class="card">
+        <div class="flex-between mb16">
+          <span class="tag tag-sun">✂️ 示范删除</span>
+          <span class="small muted">第 ${S.ti+1}/${T.length} 题</span>
+        </div>
+        <div class="section-box demo-box mb20">
+          <div class="guide">${panda(36)}<span style="font-size:14px;font-weight:600;color:var(--sun-d)">嗒嗒！这些词语消失啦～</span></div>
+          <div class="chip-row">${chips}</div>
+          <div style="margin-top:12px;font-size:12px;color:var(--ink3);text-align:center">
+            删除的成分类别：<span class="tag tag-ocean" style="font-size:11px;padding:2px 8px">${t.cat}</span>
+          </div>
+        </div>
+        <div class="center" id="demoNext" style="display:none;animation:popIn 0.3s ease">
+          <p style="font-size:15px;color:var(--ink2);margin-bottom:14px">明白了吗？轮到你来啦！</p>
+          <button class="btn btn-grass" onclick="go('test')">✋ 我来试试</button>
+        </div>
+      </div>`;
+    setTimeout(()=>{const e=document.getElementById('demoNext');if(e)e.style.display='block';},1000);
+    return;
+  }
+
+  // ===== TEST =====
+  if(S.phase==='test'){
+    let chips='';t.t.forEach((w,i)=>{chips+=chip(w,'selectable',i);});
+    let rem='';t.d.forEach((w,i)=>{rem+=`<span ${t.dd.includes(i)?'class="struck"':''}>${w} </span>`;});
+    const hasSelection=S.sel.size>0;
+    app.innerHTML=`
+      <div class="card">
+        <div class="flex-between mb12">
+          <span class="tag tag-grass">🎯 你来删</span>
+          <span class="small muted">点击要删的词语</span>
+        </div>
+        <div class="reminder mb16"><span style="font-size:12px;color:var(--ink3)">刚才的示范：</span>${rem}</div>
+        <div class="section-box test-box mb20">
+          <div style="font-size:14px;font-weight:600;color:var(--grass-d);margin-bottom:14px">请点击你认为应该删除的词语：</div>
+          <div class="chip-row">${chips}</div>
+        </div>
+        ${hasSelection?`
+          <div class="center" style="animation:popIn 0.25s ease">
+            <button class="btn btn-sun" onclick="confirm()">✅ 确认删除</button>
+            <div class="xsmall muted mt12">再次点击词语可取消选择</div>
+          </div>
+        `:`<div class="center small muted">👆 点击上方词语开始选择</div>`}
+      </div>`;
+    return;
+  }
+
+  // ===== FEEDBACK =====
+  if(S.phase==='feedback'){
+    const last=S.res[S.res.length-1];
+    const ans=t.tgt.map(i=>t.t[i]).join('、');
+    let body;
+    if(last.ok){
+      body=`
+        <div style="font-size:72px;animation:starPop 0.5s ease;display:inline-block">⭐</div>
+        <h2 style="font-size:26px;font-weight:800;color:var(--grass);margin:6px 0;font-family:'ZCOOL KuaiLe',cursive">太棒了！</h2>
+        <p style="font-size:15px;color:var(--ink2)">你找到了正确的词语！</p>`;
+    } else {
+      body=`
+        <div style="font-size:60px;animation:shake 0.5s ease;display:inline-block">🤔</div>
+        <h2 style="font-size:24px;font-weight:800;color:var(--sun-d);margin:6px 0">没关系，继续加油！</h2>
+        <p style="font-size:15px;color:var(--ink2)">参考答案：删除<strong style="color:var(--ocean)">「${ans}」</strong></p>`;
+    }
+    const isLast=S.ti+1>=T.length;
+    const needBreak=!isLast && (S.ti+1)===BREAK_AFTER;
+    const nextLabel=isLast?'🎉 查看成绩':needBreak?'🌈 休息一下':'👉 下一题';
+    const nextAction=isLast?'results':needBreak?'break':'demo';
+    app.innerHTML=`<div class="card center">${body}<div class="mt20"><button class="btn btn-ocean" onclick="next('${nextAction}')">${nextLabel}</button></div></div>`;
+    return;
+  }
+
+  // ===== RESULTS =====
+  if(S.phase==='results'){
+    let rows='';
+    S.res.forEach((r,i)=>{
+      const tr=T[i];
+      const yours=r.sel.map(j=>tr.t[j]).join('、');
+      const ans=r.tgt.map(j=>tr.t[j]).join('、');
+      rows+=`<tr><td>${tr.id}</td><td>${cpxBadge(tr.cpx)}</td><td>${yours||'—'}</td><td>${ans}</td><td>${r.ok?'✅':'❌'}</td></tr>`;
+    });
+    const pct=Math.round(S.score/T.length*100);
+    // Count by complexity
+    const byCpx={};S.res.forEach((r,i)=>{const c=T[i].cpx;if(!byCpx[c])byCpx[c]={ok:0,n:0};byCpx[c].n++;if(r.ok)byCpx[c].ok++;});
+    let cpxRows='';
+    for(const c of ['简单','中等','复杂']){
+      if(byCpx[c]){ cpxRows+=`<tr><td>${cpxBadge(c)}</td><td>${byCpx[c].ok}/${byCpx[c].n}</td><td>${Math.round(byCpx[c].ok/byCpx[c].n*100)}%</td></tr>`; }
+    }
+    app.innerHTML=`
+      <div class="card center">
+        <div style="font-size:56px;margin-bottom:4px">🎊</div>
+        <h2 style="font-family:'ZCOOL KuaiLe',cursive;font-size:28px;color:var(--ocean);margin:0 0 4px">游戏完成！</h2>
+        <p class="small muted mb16">你一共完成了 ${T.length} 道题目</p>
+        <div style="display:flex;justify-content:center;gap:3px;margin-bottom:20px">${starsHtml(S.score,T.length,32)}</div>
+        <div class="section-box demo-box mb20">
+          <div class="stat-grid">
+            <div class="stat-item"><div class="stat-num" style="color:var(--ocean)">${S.score}</div><div class="stat-label">正确数</div></div>
+            <div class="stat-div"></div>
+            <div class="stat-item"><div class="stat-num" style="color:var(--sun-d)">${pct}%</div><div class="stat-label">成分删除率</div></div>
+            <div class="stat-div"></div>
+            <div class="stat-item"><div class="stat-num" style="color:var(--grass)">${T.length}</div><div class="stat-label">完成题数</div></div>
+          </div>
+        </div>
+        <div style="text-align:left;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;color:var(--ocean);margin-bottom:6px">按句法复杂度统计：</div>
+          <table class="result-tbl" style="margin-bottom:16px">
+            <thead><tr><th>复杂度</th><th>正确/总数</th><th>正确率</th></tr></thead>
+            <tbody>${cpxRows}</tbody>
+          </table>
+          <div style="font-size:13px;font-weight:700;color:var(--ocean);margin-bottom:6px">逐题记录：</div>
+          <table class="result-tbl">
+            <thead><tr><th>题号</th><th>复杂度</th><th>你的选择</th><th>正确答案</th><th>结果</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <div class="mt20"><button class="btn btn-ocean" onclick="reset()">🔄 再玩一次</button></div>
+        <div class="footer">
+          本Demo完整展示了先导实验游戏化交互界面的核心流程<br>
+          图标化指令 → 动画示范 → 自主操作 → 即时反馈 → 中场休息(疲劳控制) → 成绩统计<br>
+          共12题，覆盖简单/中等/复杂三种句法层级 · 第6题后触发中场休息<br>
+          同济大学 · 听障儿童语言结构表征的发展与AI辅助启示 · 于珏老师指导
+        </div>
+      </div>`;
+    return;
+  }
+}
+
+function go(p){S.phase=p;if(p==='test')S.sel=new Set();if(p==='demo'&&S.breakTimer){clearInterval(S.breakTimer);S.breakTimer=null;}R();}
+function toggle(i){if(S.sel.has(i))S.sel.delete(i);else S.sel.add(i);R();}
+function confirm(){
+  const t=T[S.ti],sel=Array.from(S.sel).sort(),tgt=[...t.tgt].sort();
+  const ok=JSON.stringify(sel)===JSON.stringify(tgt);
+  if(ok)S.score++;
+  S.res.push({sel,tgt,ok});
+  S.phase='feedback';R();
+}
+function next(p){if(p==='demo'||p==='break')S.ti++;S.sel=new Set();S.breakTimer=null;S.breakCount=0;S.phase=p;R();}
+function reset(){S={phase:'welcome',ti:0,sel:new Set(),score:0,res:[],breakTimer:null,breakCount:0};R();}
+
+function toggleDesignPanel(){document.getElementById('designPanel').classList.toggle('open');}
+document.getElementById('designToggle').addEventListener('click',toggleDesignPanel);
+
+R();
+</script>
+</body>
+</html>
